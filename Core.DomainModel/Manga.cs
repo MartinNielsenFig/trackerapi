@@ -14,5 +14,6 @@ namespace Core.DomainModel
         public StatusEnum Status { get; set; }
         public int Rating { get; set; }
         public bool NewChapter { get; set; }
+        public string MangaRockId { get; set; }
     }
 }
