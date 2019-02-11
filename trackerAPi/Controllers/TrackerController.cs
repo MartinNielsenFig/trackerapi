@@ -69,79 +69,139 @@ namespace trackerAPi.Controllers
             {
                 try
                 {
-                    if(manga.MangaRockId == "mrs-serie-64995")
-                    {
-                        var x = "test";
-                    }
-
-                                        if (String.IsNullOrEmpty(manga.MangaRockId))
-                    {
-                        WebRequest searchRequest = WebRequest.Create("https://api.mangarockhd.com/query/web400/mrs_quick_search?country=Denmark");
-                        searchRequest.Method = "POST";
-                        searchRequest.ContentLength = manga.Name.Length;
-                        using (var dataStream = searchRequest.GetRequestStream())
-                        {
-                            dataStream.Write(Encoding.ASCII.GetBytes(manga.Name), 0, manga.Name.Length);
-                        }
-
-                        WebResponse searchResponse = searchRequest.GetResponse();
-                        StreamReader searchReader = new StreamReader(searchResponse.GetResponseStream());
-
-                        string jsonSerieObj = searchReader.ReadToEnd();
-
-                        dynamic obj = JsonConvert.DeserializeObject(jsonSerieObj);
-
-                        if (obj.data.series == null)
-                        {
-                            continue;
-                        }
-
-                        var serie = obj.data.series.ToObject<List<string>>();
-
-                        manga.MangaRockId = serie[0];
-                        _mangaRepository.Update(manga);
-                        _unitOfWork.Save();
-                    }
-
-                    WebRequest request = WebRequest.Create("https://mangarock.com/manga/" + manga.MangaRockId);
-                    WebResponse response = request.GetResponse();
-                    StreamReader reader = new StreamReader(response.GetResponseStream());
-
-                    string text = reader.ReadToEnd();
-
-                    var indexOfTable = text.LastIndexOf("<tbody");
-
-                    var indexOfChapter = text.IndexOf("Chapter", indexOfTable) + 7;
-
-                    var indexOfNoneNumber = 0;
-                    for (int i = indexOfChapter; i < indexOfChapter + 10; i++)
-                    {
-                        var toCompare = "" + text[i];
-                        if (toCompare != " " && !Regex.IsMatch(toCompare, @"^\d+$"))
-                        {
-                            indexOfNoneNumber = i;
-                            break;
-                        }
-                    }
-
-                    var substring = text.Substring(indexOfChapter, indexOfNoneNumber - indexOfChapter);
-
-                    if (Convert.ToInt32(substring) > manga.Chapter)
-                    {
-                        manga.NewChapter = true;
-                        _mangaRepository.Update(manga);
-                        _unitOfWork.Save();
-                    }
+                    tryMangaRock(manga);
+                    tryManganelo(manga);
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
-                    var x = 10;
+                    System.Diagnostics.Debug.WriteLine(manga.Name + " " + manga.MangaRockId);
                 }
             }
 
             return listofMangas.OrderByDescending(s => s.NewChapter);
         }
 
+        private void tryMangaRock(Manga manga)
+        {
+            if (String.IsNullOrEmpty(manga.MangaRockId))
+            {
+                WebRequest searchRequest = WebRequest.Create("https://api.mangarockhd.com/query/web400/mrs_quick_search?country=Denmark");
+                searchRequest.Method = "POST";
+                searchRequest.ContentLength = manga.Name.Length;
+                using (var dataStream = searchRequest.GetRequestStream())
+                {
+                    dataStream.Write(Encoding.ASCII.GetBytes(manga.Name), 0, manga.Name.Length);
+                }
+
+                WebResponse searchResponse = searchRequest.GetResponse();
+                StreamReader searchReader = new StreamReader(searchResponse.GetResponseStream());
+
+                string jsonSerieObj = searchReader.ReadToEnd();
+
+                dynamic obj = JsonConvert.DeserializeObject(jsonSerieObj);
+
+                if (obj.data.series == null)
+                {
+                    return;
+                }
+
+                var serie = obj.data.series.ToObject<List<string>>();
+
+                manga.MangaRockId = serie[0];
+                _mangaRepository.Update(manga);
+                _unitOfWork.Save();
+            }
+
+
+            WebRequest request = WebRequest.Create("https://mangarock.com/manga/" + manga.MangaRockId);
+            WebResponse response = request.GetResponse();
+            StreamReader reader = new StreamReader(response.GetResponseStream());
+
+            string text = reader.ReadToEnd();
+
+            var indexOfTable = text.LastIndexOf("<tbody");
+
+            var indexOfChapter = text.IndexOf("Chapter", indexOfTable) + 7;
+
+            var indexOfNoneNumber = 0;
+            for (int i = indexOfChapter; i < indexOfChapter + 10; i++)
+            {
+                var toCompare = "" + text[i];
+                if (toCompare != " " && !Regex.IsMatch(toCompare, @"^\d+$"))
+                {
+                    indexOfNoneNumber = i;
+                    break;
+                }
+            }
+
+            var substring = text.Substring(indexOfChapter, indexOfNoneNumber - indexOfChapter);
+
+            if (Convert.ToInt32(substring) > manga.Chapter)
+            {
+                manga.NewChapter = true;
+                _mangaRepository.Update(manga);
+                _unitOfWork.Save();
+            }
+        }
+        private void tryManganelo(Manga manga)
+        {
+            if (String.IsNullOrEmpty(manga.ManganeloId))
+            {
+                WebRequest searchRequest = WebRequest.Create("https://manganelo.com/search/"+ manga.Name.Replace(' ','_'));
+                WebResponse searchResponse = searchRequest.GetResponse();
+                StreamReader searchReader = new StreamReader(searchResponse.GetResponseStream());
+
+                string searchText = searchReader.ReadToEnd();
+
+                var indexOfName = searchText.IndexOf("\">"+manga.Name);
+
+                var indexOfUrl = searchText.IndexOf("https://manganelo.com/manga/", indexOfName - "https://manganelo.com/manga/".Length - 40);
+
+                string serie = searchText.Substring(indexOfUrl+ "https://manganelo.com/manga/".Length, indexOfName- (indexOfUrl+ "https://manganelo.com/manga/".Length));
+
+                manga.ManganeloId = serie;
+                _mangaRepository.Update(manga);
+                _unitOfWork.Save();
+            }
+
+
+            WebRequest request = WebRequest.Create("https://manganelo.com/manga/" + manga.ManganeloId);
+            WebResponse response = request.GetResponse();
+            StreamReader reader = new StreamReader(response.GetResponseStream());
+
+            string text = reader.ReadToEnd().ToLower();
+
+            if (manga.ManganeloId == "billionaire_girl")
+            {
+                Console.Write("testr");
+            }
+
+            var indexOfTable = text.IndexOf("class=\"chapter-list\"");
+
+            var indexOfTitle = text.IndexOf("title=", indexOfTable);
+
+            var indexOfChapter = text.IndexOf("chapter", indexOfTitle) + 7;
+
+            var indexOfNoneNumber = 0;
+            for (int i = indexOfChapter; i < indexOfChapter + 10; i++)
+            {
+                var toCompare = "" + text[i];
+                if (toCompare != " " && !Regex.IsMatch(toCompare, @"^\d+$"))
+                {
+                    indexOfNoneNumber = i;
+                    break;
+                }
+            }
+
+            var substring = text.Substring(indexOfChapter, indexOfNoneNumber - indexOfChapter);
+
+            if (Convert.ToInt32(substring) > manga.Chapter)
+            {
+                manga.NewChapter = true;
+                _mangaRepository.Update(manga);
+                _unitOfWork.Save();
+            }
+        }
         [EnableCors(origins: "*", headers: "*", methods: "*")]
         [HttpPost]
         [Route("api/Tracker/AddOne")]

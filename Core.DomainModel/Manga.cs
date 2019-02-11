@@ -15,5 +15,6 @@ namespace Core.DomainModel
         public int Rating { get; set; }
         public bool NewChapter { get; set; }
         public string MangaRockId { get; set; }
+        public string ManganeloId { get; set; }
     }
 }
