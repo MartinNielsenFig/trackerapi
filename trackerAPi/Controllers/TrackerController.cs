@@ -70,6 +70,13 @@ namespace trackerAPi.Controllers
                 try
                 {
                     tryMangaRock(manga);
+                }
+                catch (Exception e)
+                {
+                    System.Diagnostics.Debug.WriteLine(manga.Name + " " + manga.MangaRockId);
+                }
+                try
+                {
                     tryManganelo(manga);
                 }
                 catch (Exception e)
