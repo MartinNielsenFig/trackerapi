@@ -35,7 +35,8 @@ namespace Core.DomainModel
     {
         Airing,
         Completed,
-        NA
+        NA,
+        Error
     }
 
     public enum AirDayEnum

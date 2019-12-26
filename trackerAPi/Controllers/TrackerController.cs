@@ -62,8 +62,8 @@ namespace trackerAPi.Controllers
         {
             list = _listRepository.Get().Single(s => s.Owner == "948395601842199");
             var listofMangas = list.Mangas;
-            List<Manga> todaysshows = new List<Manga>();
-
+            List<Manga> mangaRockErrors = new List<Manga>();
+            List<Manga> manganeloErrors = new List<Manga>();
 
             foreach (var manga in listofMangas)
             {
@@ -73,6 +73,7 @@ namespace trackerAPi.Controllers
                 }
                 catch (Exception e)
                 {
+                    mangaRockErrors.Add(manga);
                     System.Diagnostics.Debug.WriteLine(manga.Name + " " + manga.MangaRockId);
                 }
                 try
@@ -81,16 +82,30 @@ namespace trackerAPi.Controllers
                 }
                 catch (Exception e)
                 {
+                    manganeloErrors.Add(manga);
                     System.Diagnostics.Debug.WriteLine(manga.Name + " " + manga.MangaRockId);
                 }
             }
 
+            IEnumerable<Manga> commonErros = manganeloErrors.Intersect(mangaRockErrors,new MangaComparer());
+
             return listofMangas.OrderByDescending(s => s.NewChapter);
+        }
+
+
+        private bool wrongMangaRockId(string id){
+            WebRequest request = WebRequest.Create("https://mangarock.com/manga/" + id);
+            WebResponse response = request.GetResponse();
+            StreamReader reader = new StreamReader(response.GetResponseStream());
+
+            string text = reader.ReadToEnd();
+
+            return text.IndexOf("Page Not Found") != -1;
         }
 
         private void tryMangaRock(Manga manga)
         {
-            if (String.IsNullOrEmpty(manga.MangaRockId))
+            if (String.IsNullOrEmpty(manga.MangaRockId) || wrongMangaRockId(manga.MangaRockId))
             {
                 WebRequest searchRequest = WebRequest.Create("https://api.mangarockhd.com/query/web400/mrs_quick_search?country=Denmark");
                 searchRequest.Method = "POST";
@@ -150,9 +165,22 @@ namespace trackerAPi.Controllers
                 _unitOfWork.Save();
             }
         }
+
+        private bool wrongManganeloId(string id)
+        {
+            WebRequest request = WebRequest.Create("https://manganelo.com/manga/" + id);
+            WebResponse response = request.GetResponse();
+            StreamReader reader = new StreamReader(response.GetResponseStream());
+
+            string text = reader.ReadToEnd();
+
+            return text.IndexOf("Sorry, the page you have requested cannot be found.") != -1;
+        }
+
         private void tryManganelo(Manga manga)
         {
-            if (String.IsNullOrEmpty(manga.ManganeloId))
+         
+            if (String.IsNullOrEmpty(manga.ManganeloId) || wrongManganeloId(manga.ManganeloId))
             {
                 WebRequest searchRequest = WebRequest.Create("https://manganelo.com/search/"+ manga.Name.Replace(' ','_'));
                 WebResponse searchResponse = searchRequest.GetResponse();
@@ -178,16 +206,7 @@ namespace trackerAPi.Controllers
 
             string text = reader.ReadToEnd().ToLower();
 
-            if (manga.ManganeloId == "billionaire_girl")
-            {
-                Console.Write("testr");
-            }
-
-            var indexOfTable = text.IndexOf("class=\"chapter-list\"");
-
-            var indexOfTitle = text.IndexOf("title=", indexOfTable);
-
-            var indexOfChapter = text.IndexOf("chapter", indexOfTitle) + 7;
+            var indexOfChapter = text.IndexOf("href=\"https://manganelo.com/chapter/" + manga.ManganeloId + "/chapter_") + 45 + manga.ManganeloId.Length;
 
             var indexOfNoneNumber = 0;
             for (int i = indexOfChapter; i < indexOfChapter + 10; i++)
@@ -220,5 +239,34 @@ namespace trackerAPi.Controllers
             _mangaRepository.Update(list.Mangas.Single(s => s.MangaId == id));
             _unitOfWork.Save();
         }
+    }
+
+    class MangaComparer : IEqualityComparer<Manga>
+    {
+        // Products are equal if their names and product numbers are equal.
+        public bool Equals(Manga x, Manga y)
+        {
+
+            return x.MangaId == y.MangaId;
+        }
+
+        // If Equals() returns true for a pair of objects 
+        // then GetHashCode() must return the same value for these objects.
+
+        public int GetHashCode(Manga manga)
+        {
+            //Check whether the object is null
+            if (Object.ReferenceEquals(manga, null)) return 0;
+
+            //Get hash code for the Name field if it is not null.
+            int hashProductName = manga.Name == null ? 0 : manga.Name.GetHashCode();
+
+            //Get hash code for the Code field.
+            int hashProductCode = manga.MangaId.GetHashCode();
+
+            //Calculate the hash code for the product.
+            return hashProductName ^ hashProductCode;
+        }
+
     }
 }
