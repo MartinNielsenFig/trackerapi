@@ -67,16 +67,7 @@ namespace trackerAPi.Controllers
 
             foreach (var manga in listofMangas)
             {
-                try
-                {
-                    tryMangaRock(manga);
-                }
-                catch (Exception e)
-                {
-                    mangaRockErrors.Add(manga);
-                    System.Diagnostics.Debug.WriteLine(manga.Name + " " + manga.MangaRockId);
-                }
-                try
+              try
                 {
                     tryManganelo(manga);
                 }
