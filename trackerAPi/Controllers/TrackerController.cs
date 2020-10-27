@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Web.Http;
@@ -62,29 +63,39 @@ namespace trackerAPi.Controllers
         {
             list = _listRepository.Get().Single(s => s.Owner == "948395601842199");
             var listofMangas = list.Mangas;
-            List<Manga> mangaRockErrors = new List<Manga>();
+            List<Manga> mangaKissErrors = new List<Manga>();
             List<Manga> manganeloErrors = new List<Manga>();
 
             foreach (var manga in listofMangas)
             {
-              try
+                try
                 {
                     tryManganelo(manga);
                 }
                 catch (Exception e)
                 {
                     manganeloErrors.Add(manga);
-                    System.Diagnostics.Debug.WriteLine(manga.Name + " " + manga.MangaRockId);
+                    System.Diagnostics.Debug.WriteLine(manga.Name + " " + manga.ManganeloId);
+                }
+                try
+                {
+                    tryKissManga(manga);
+                }
+                catch (Exception e)
+                {
+                    mangaKissErrors.Add(manga);
+                    System.Diagnostics.Debug.WriteLine(manga.Name + " " + manga.mangakissId);
                 }
             }
 
-            IEnumerable<Manga> commonErros = manganeloErrors.Intersect(mangaRockErrors,new MangaComparer());
+            IEnumerable<Manga> commonErros = manganeloErrors.Intersect(mangaKissErrors, new MangaComparer());
 
             return listofMangas.OrderByDescending(s => s.NewChapter);
         }
 
 
-        private bool wrongMangaRockId(string id){
+        private bool wrongMangaRockId(string id)
+        {
             WebRequest request = WebRequest.Create("https://mangarock.com/manga/" + id);
             WebResponse response = request.GetResponse();
             StreamReader reader = new StreamReader(response.GetResponseStream());
@@ -170,20 +181,20 @@ namespace trackerAPi.Controllers
 
         private void tryManganelo(Manga manga)
         {
-         
+
             if (String.IsNullOrEmpty(manga.ManganeloId) || wrongManganeloId(manga.ManganeloId))
             {
-                WebRequest searchRequest = WebRequest.Create("https://manganelo.com/search/"+ manga.Name.Replace(' ','_'));
+                WebRequest searchRequest = WebRequest.Create("https://manganelo.com/search/" + manga.Name.Replace(' ', '_'));
                 WebResponse searchResponse = searchRequest.GetResponse();
                 StreamReader searchReader = new StreamReader(searchResponse.GetResponseStream());
 
                 string searchText = searchReader.ReadToEnd();
 
-                var indexOfName = searchText.IndexOf("\">"+manga.Name);
+                var indexOfName = searchText.IndexOf("\">" + manga.Name);
 
                 var indexOfUrl = searchText.IndexOf("https://manganelo.com/manga/", indexOfName - "https://manganelo.com/manga/".Length - 40);
 
-                string serie = searchText.Substring(indexOfUrl+ "https://manganelo.com/manga/".Length, indexOfName- (indexOfUrl+ "https://manganelo.com/manga/".Length));
+                string serie = searchText.Substring(indexOfUrl + "https://manganelo.com/manga/".Length, indexOfName - (indexOfUrl + "https://manganelo.com/manga/".Length));
 
                 manga.ManganeloId = serie;
                 _mangaRepository.Update(manga);
@@ -219,6 +230,111 @@ namespace trackerAPi.Controllers
                 _unitOfWork.Save();
             }
         }
+
+        private void tryKissManga(Manga manga, Boolean forced =false)
+        {
+            if (String.IsNullOrEmpty(manga.mangakissId) || forced)
+            {
+                WebRequest searchRequest = WebRequest.Create("https://kissmanga.in/?s=" + manga.Name.Replace(' ', '+') + "&post_type=wp-manga");
+                WebResponse searchResponse = searchRequest.GetResponse();
+                StreamReader searchReader = new StreamReader(searchResponse.GetResponseStream());
+
+                string searchText = searchReader.ReadToEnd();
+
+                if (searchText.IndexOf("No matches found. Try a different search...") == -1)
+                {
+                    var indexOfTitle = searchText.IndexOf("class=\"post-title\"");
+                    var indexOfFirstOccurance = searchText.IndexOf("href=\"https://kissmanga.in/kissmanga/", indexOfTitle);
+
+                    var indexOfEnd = searchText.IndexOf("/", indexOfFirstOccurance + "href=\"https://kissmanga.in/kissmanga/".Length);
+
+                    string serie = searchText.Substring(indexOfFirstOccurance + "href=\"https://kissmanga.in/kissmanga/".Length, indexOfEnd - (indexOfFirstOccurance + "href=\"https://kissmanga.in/kissmanga/".Length));
+
+                    manga.mangakissId = serie;
+                    _mangaRepository.Update(manga);
+                    _unitOfWork.Save();
+                }
+            }
+
+            if (manga.mangakissId != null && manga.mangakissId != "ERROR")
+            {
+
+                WebRequest requestForExtraId = WebRequest.Create("https://kissmanga.in/kissmanga/" + manga.mangakissId);
+                string textForExtraId = "";
+                try
+                {
+                    WebResponse responseForExtraId = requestForExtraId.GetResponse();
+                    StreamReader readerForExtraId = new StreamReader(responseForExtraId.GetResponseStream());
+                    textForExtraId = readerForExtraId.ReadToEnd().ToLower();
+                }
+                catch (WebException e)
+                {
+                    if (!forced) { 
+                        tryKissManga(manga,true);
+                    }
+                }
+                if(manga.Name == "Overgeared")
+                {
+                    Console.WriteLine("");
+                }
+
+                var extraIdStart = textForExtraId.IndexOf("id=\"manga-chapters-holder\" data-id=\"") + "id=\"manga-chapters-holder\" data-id=\"".Length;
+
+                var indexOfNoneNumber = 0;
+                for (int i = extraIdStart; i < extraIdStart + 10; i++)
+                {
+                    var toCompare = "" + textForExtraId[i];
+                    if (toCompare != " " && !Regex.IsMatch(toCompare, @"^\d+$"))
+                    {
+                        indexOfNoneNumber = i;
+                        break;
+                    }
+                }
+
+                var extraId = textForExtraId.Substring(extraIdStart, indexOfNoneNumber - extraIdStart);
+
+                var request = (HttpWebRequest)WebRequest.Create("https://kissmanga.in/wp-admin/admin-ajax.php");
+
+                var postData = "action=manga_get_chapters&manga="+extraId;
+                var data = Encoding.ASCII.GetBytes(postData);
+
+                request.Method = "POST";
+                request.ContentType = "application/x-www-form-urlencoded";
+                request.ContentLength = data.Length;
+
+                using (var stream = request.GetRequestStream())
+                {
+                    stream.Write(data, 0, data.Length);
+                }
+
+                var response = (HttpWebResponse)request.GetResponse();
+
+                var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
+
+                string text = responseString.ToLower();
+
+                var indexOfChapters = text.IndexOf("wp-manga-chapter");
+                var indexOfChapterStart = text.IndexOf("href=\"https://kissmanga.in/kissmanga/" + manga.mangakissId, indexOfChapters) + 38 + manga.mangakissId.Length;
+                var indexOfChapterEnd = text.IndexOf("/\">", indexOfChapterStart);
+
+                var arrayOfStrings = text.Substring(indexOfChapterStart, indexOfChapterEnd - indexOfChapterStart).Split('/');
+                
+                var substring = "";
+                if (arrayOfStrings.Last().Contains("-")){
+                    substring = arrayOfStrings.Last().Split('-')[1];
+                }else{
+                    substring = arrayOfStrings.Last();
+                }
+
+                if (Convert.ToInt32(substring) > manga.Chapter)
+                {
+                    manga.NewChapter = true;
+                    _mangaRepository.Update(manga);
+                    _unitOfWork.Save();
+                }
+            }
+        }
+
         [EnableCors(origins: "*", headers: "*", methods: "*")]
         [HttpPost]
         [Route("api/Tracker/AddOne")]

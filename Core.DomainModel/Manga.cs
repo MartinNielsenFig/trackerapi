@@ -16,5 +16,6 @@ namespace Core.DomainModel
         public bool NewChapter { get; set; }
         public string MangaRockId { get; set; }
         public string ManganeloId { get; set; }
+        public string mangakissId { get; set; }
     }
 }
