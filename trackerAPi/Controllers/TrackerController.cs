@@ -170,31 +170,34 @@ namespace trackerAPi.Controllers
 
         private bool wrongManganeloId(string id)
         {
-            WebRequest request = WebRequest.Create("https://manganelo.com/manga/" + id);
+            WebRequest request = WebRequest.Create("https://readmanganato.com/manga-" + id);
             WebResponse response = request.GetResponse();
             StreamReader reader = new StreamReader(response.GetResponseStream());
 
             string text = reader.ReadToEnd();
 
-            return text.IndexOf("Sorry, the page you have requested cannot be found.") != -1;
+            return text.IndexOf("Sorry, the page you have requested cannot be found.") != -1 || text.IndexOf("404 - PAGE NOT FOUND") != -1;
         }
 
         private void tryManganelo(Manga manga)
         {
-
+            if (manga.Name == "Abide in the Wind")
+            {
+                Console.WriteLine();
+            }
             if (String.IsNullOrEmpty(manga.ManganeloId) || wrongManganeloId(manga.ManganeloId))
             {
-                WebRequest searchRequest = WebRequest.Create("https://manganelo.com/search/" + manga.Name.Replace(' ', '_'));
+                WebRequest searchRequest = WebRequest.Create("https://manganato.com/search/story/" + Regex.Replace(manga.Name, @"[' ]", "_"));
                 WebResponse searchResponse = searchRequest.GetResponse();
                 StreamReader searchReader = new StreamReader(searchResponse.GetResponseStream());
 
                 string searchText = searchReader.ReadToEnd();
 
-                var indexOfName = searchText.IndexOf("\">" + manga.Name);
+                var indexOfName = searchText.IndexOf("\" title=\"" + manga.Name);
 
-                var indexOfUrl = searchText.IndexOf("https://manganelo.com/manga/", indexOfName - "https://manganelo.com/manga/".Length - 40);
+                var indexOfUrl = searchText.IndexOf("ato.com/manga-", indexOfName - "ato.com/manga-".Length - 40);
 
-                string serie = searchText.Substring(indexOfUrl + "https://manganelo.com/manga/".Length, indexOfName - (indexOfUrl + "https://manganelo.com/manga/".Length));
+                string serie = searchText.Substring(indexOfUrl + "ato.com/manga-".Length, indexOfName - (indexOfUrl + "ato.com/manga-".Length));
 
                 manga.ManganeloId = serie;
                 _mangaRepository.Update(manga);
@@ -202,13 +205,13 @@ namespace trackerAPi.Controllers
             }
 
 
-            WebRequest request = WebRequest.Create("https://manganelo.com/manga/" + manga.ManganeloId);
+            WebRequest request = WebRequest.Create("https://readmanganato.com/manga-" + manga.ManganeloId);
             WebResponse response = request.GetResponse();
             StreamReader reader = new StreamReader(response.GetResponseStream());
 
             string text = reader.ReadToEnd().ToLower();
 
-            var indexOfChapter = text.IndexOf("href=\"https://manganelo.com/chapter/" + manga.ManganeloId + "/chapter_") + 45 + manga.ManganeloId.Length;
+            var indexOfChapter = text.IndexOf("href=\"https://readmanganato.com/manga-" + manga.ManganeloId + "/chapter-") + 45 + manga.ManganeloId.Length;
 
             var indexOfNoneNumber = 0;
             for (int i = indexOfChapter; i < indexOfChapter + 10; i++)
@@ -256,7 +259,12 @@ namespace trackerAPi.Controllers
                 }
             }
 
-            if (manga.mangakissId != null && manga.mangakissId != "ERROR")
+            if (manga.mangakissId == "ERROR")
+            {
+                throw new Exception("Can't find on Kiss");
+            }
+
+            if (manga.mangakissId != null)
             {
 
                 WebRequest requestForExtraId = WebRequest.Create("https://kissmanga.in/kissmanga/" + manga.mangakissId);
@@ -272,10 +280,6 @@ namespace trackerAPi.Controllers
                     if (!forced) { 
                         tryKissManga(manga,true);
                     }
-                }
-                if(manga.Name == "Overgeared")
-                {
-                    Console.WriteLine("");
                 }
 
                 var extraIdStart = textForExtraId.IndexOf("id=\"manga-chapters-holder\" data-id=\"") + "id=\"manga-chapters-holder\" data-id=\"".Length;
