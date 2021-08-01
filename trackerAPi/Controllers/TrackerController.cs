@@ -75,7 +75,6 @@ namespace trackerAPi.Controllers
                 catch (Exception e)
                 {
                     manganeloErrors.Add(manga);
-                    System.Diagnostics.Debug.WriteLine(manga.Name + " " + manga.ManganeloId);
                 }
                 try
                 {
@@ -84,7 +83,6 @@ namespace trackerAPi.Controllers
                 catch (Exception e)
                 {
                     mangaKissErrors.Add(manga);
-                    System.Diagnostics.Debug.WriteLine(manga.Name + " " + manga.mangakissId);
                 }
             }
 
@@ -179,25 +177,26 @@ namespace trackerAPi.Controllers
             return text.IndexOf("Sorry, the page you have requested cannot be found.") != -1 || text.IndexOf("404 - PAGE NOT FOUND") != -1;
         }
 
-        private void tryManganelo(Manga manga)
+        private void tryManganelo(Manga manga, Boolean forced = false)
         {
-            if (manga.Name == "Abide in the Wind")
+            if (forced || String.IsNullOrEmpty(manga.ManganeloId) || wrongManganeloId(manga.ManganeloId))
             {
-                Console.WriteLine();
-            }
-            if (String.IsNullOrEmpty(manga.ManganeloId) || wrongManganeloId(manga.ManganeloId))
-            {
-                WebRequest searchRequest = WebRequest.Create("https://manganato.com/search/story/" + Regex.Replace(manga.Name, @"[' ]", "_"));
+                string searchNameReduced = Regex.Replace(manga.Name, @"[!.+:\[\]]", "");
+                string searchNameReplaced = Regex.Replace(searchNameReduced, @"[-' ]", "_");
+
+                WebRequest searchRequest = WebRequest.Create("https://manganato.com/search/story/" + searchNameReplaced);
                 WebResponse searchResponse = searchRequest.GetResponse();
                 StreamReader searchReader = new StreamReader(searchResponse.GetResponseStream());
 
                 string searchText = searchReader.ReadToEnd();
 
-                var indexOfName = searchText.IndexOf("\" title=\"" + manga.Name);
+                var indexOfFirst = searchText.IndexOf("search-story-item");
 
-                var indexOfUrl = searchText.IndexOf("ato.com/manga-", indexOfName - "ato.com/manga-".Length - 40);
+                var indexOfUrl = searchText.IndexOf("ato.com/manga-", indexOfFirst);
 
-                string serie = searchText.Substring(indexOfUrl + "ato.com/manga-".Length, indexOfName - (indexOfUrl + "ato.com/manga-".Length));
+                var indexOfEnd = searchText.IndexOf("\"", indexOfUrl);
+
+                string serie = searchText.Substring(indexOfUrl + "ato.com/manga-".Length, indexOfEnd - (indexOfUrl + "ato.com/manga-".Length));
 
                 manga.ManganeloId = serie;
                 _mangaRepository.Update(manga);
@@ -211,7 +210,7 @@ namespace trackerAPi.Controllers
 
             string text = reader.ReadToEnd().ToLower();
 
-            var indexOfChapter = text.IndexOf("href=\"https://readmanganato.com/manga-" + manga.ManganeloId + "/chapter-") + 45 + manga.ManganeloId.Length;
+            var indexOfChapter = text.IndexOf("href=\"https://readmanganato.com/manga-" + manga.ManganeloId + "/chapter-") + "href=\"https://readmanganato.com/manga-".Length + "/chapter-".Length + manga.ManganeloId.Length;
 
             var indexOfNoneNumber = 0;
             for (int i = indexOfChapter; i < indexOfChapter + 10; i++)
