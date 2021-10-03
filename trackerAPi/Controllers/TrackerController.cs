@@ -266,13 +266,13 @@ namespace trackerAPi.Controllers
             if (manga.mangakissId != null)
             {
 
-                WebRequest requestForExtraId = WebRequest.Create("https://kissmanga.in/kissmanga/" + manga.mangakissId);
-                string textForExtraId = "";
+                WebRequest request = WebRequest.Create("https://kissmanga.in/kissmanga/" + manga.mangakissId);
+                string text = "";
                 try
                 {
-                    WebResponse responseForExtraId = requestForExtraId.GetResponse();
-                    StreamReader readerForExtraId = new StreamReader(responseForExtraId.GetResponseStream());
-                    textForExtraId = readerForExtraId.ReadToEnd().ToLower();
+                    WebResponse response = request.GetResponse();
+                    StreamReader reader = new StreamReader(response.GetResponseStream());
+                    text = reader.ReadToEnd().ToLower();
                 }
                 catch (WebException e)
                 {
@@ -281,48 +281,13 @@ namespace trackerAPi.Controllers
                     }
                 }
 
-                var extraIdStart = textForExtraId.IndexOf("id=\"manga-chapters-holder\" data-id=\"") + "id=\"manga-chapters-holder\" data-id=\"".Length;
-
-                var indexOfNoneNumber = 0;
-                for (int i = extraIdStart; i < extraIdStart + 10; i++)
-                {
-                    var toCompare = "" + textForExtraId[i];
-                    if (toCompare != " " && !Regex.IsMatch(toCompare, @"^\d+$"))
-                    {
-                        indexOfNoneNumber = i;
-                        break;
-                    }
-                }
-
-                var extraId = textForExtraId.Substring(extraIdStart, indexOfNoneNumber - extraIdStart);
-
-                var request = (HttpWebRequest)WebRequest.Create("https://kissmanga.in/wp-admin/admin-ajax.php");
-
-                var postData = "action=manga_get_chapters&manga="+extraId;
-                var data = Encoding.ASCII.GetBytes(postData);
-
-                request.Method = "POST";
-                request.ContentType = "application/x-www-form-urlencoded";
-                request.ContentLength = data.Length;
-
-                using (var stream = request.GetRequestStream())
-                {
-                    stream.Write(data, 0, data.Length);
-                }
-
-                var response = (HttpWebResponse)request.GetResponse();
-
-                var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
-
-                string text = responseString.ToLower();
-
                 var indexOfChapters = text.IndexOf("wp-manga-chapter");
                 var indexOfChapterStart = text.IndexOf("href=\"https://kissmanga.in/kissmanga/" + manga.mangakissId, indexOfChapters) + 38 + manga.mangakissId.Length;
                 var indexOfChapterEnd = text.IndexOf("/\">", indexOfChapterStart);
 
                 var arrayOfStrings = text.Substring(indexOfChapterStart, indexOfChapterEnd - indexOfChapterStart).Split('/');
-                
-                var substring = "";
+
+                string substring;
                 if (arrayOfStrings.Last().Contains("-")){
                     substring = arrayOfStrings.Last().Split('-')[1];
                 }else{
