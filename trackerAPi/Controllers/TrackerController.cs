@@ -266,7 +266,10 @@ namespace trackerAPi.Controllers
             if (manga.mangakissId != null)
             {
 
-                WebRequest request = WebRequest.Create("https://kissmanga.in/kissmanga/" + manga.mangakissId);
+                HttpWebRequest request = (HttpWebRequest)HttpWebRequest.Create("https://kissmanga.in/kissmanga/" + manga.mangakissId);
+                request.Timeout = 10000;
+                request.UserAgent = "Code Sample Web Client";
+                request.Credentials = CredentialCache.DefaultCredentials;
                 string text = "";
                 try
                 {
