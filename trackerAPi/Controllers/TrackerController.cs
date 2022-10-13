@@ -210,7 +210,7 @@ namespace trackerAPi.Controllers
 
             string text = reader.ReadToEnd().ToLower();
 
-            var indexOfChapter = text.IndexOf("href=\"https://readmanganato.com/manga-" + manga.ManganeloId + "/chapter-") + "href=\"https://readmanganato.com/manga-".Length + "/chapter-".Length + manga.ManganeloId.Length;
+            var indexOfChapter = text.IndexOf("href=\"https://chapmanganato.com/manga-" + manga.ManganeloId + "/chapter-") + "href=\"https://chapmanganato.com/manga-".Length + "/chapter-".Length + manga.ManganeloId.Length;
 
             var indexOfNoneNumber = 0;
             for (int i = indexOfChapter; i < indexOfChapter + 10; i++)
